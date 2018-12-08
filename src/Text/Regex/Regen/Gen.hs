@@ -36,23 +36,7 @@ generatePattern :: Pattern -> StdGen -> (Either SomeException S.ByteString, StdG
 generatePattern p g = let (s,e) = runGen genTop (makeGenState p g) in (e, gsGen s)
     where
     state  = makeGenState p g
-    genTop = getGroup 0 >>= \g -> checkRecursion g >> genGroup g
-
-checkRecursion :: Group -> Gen ()
-checkRecursion = go [0] . gParts
-    where
-    go ixs part = case part of
-        Sequence ps      -> mapM_ (go ixs) ps
-        Quantified p _ _ -> go ixs p
-        Alternative ps   -> mapM_ (go ixs) ps
-        Reference ix     -> getGroup ix >>= go ixs . gParts
-        Call ix          -> do
-            Group ix' part' <- either getGroup getNamedGroup ix
-            if ix' `elem` ixs
-                then () <$ nullify part
-                else go (ix':ixs) part'
-        Anchored p _ q   -> mapM_ (go ixs) [p,q]
-        _                -> pure ()
+    genTop = getGroup 0 >>= genGroup
 
 data GenState = GenState
     { gsGen        :: !StdGen
@@ -191,7 +175,7 @@ genPart (CClass      b cs)   = genCClass b cs
 genPart (Quantified  p r t)  = genQuantified p r t
 genPart (Alternative ps)     = genAlternative ps
 genPart (Reference   ix)     = genReference ix
-genPart (Call        ix)     = genCall ix
+genPart (Call        _)      = eNotSupported "pattern calls"
 genPart (Anchored    p as q) = genAnchored p as q
 
 genSequence :: [Part] -> Gen S.ByteString
@@ -210,9 +194,6 @@ genQuantified p (Range n m) _ = do
 
 genAlternative :: [Part] -> Gen S.ByteString
 genAlternative = genPart <=< randomElemGen
-
-genCall :: Either Int S.ByteString -> Gen S.ByteString
-genCall ix = genPart . gParts =<< either getGroup getNamedGroup ix
 
 genReference :: Int -> Gen S.ByteString
 genReference ix = getResolved ix <|> do
@@ -236,29 +217,24 @@ genAnchored p1 as p2 = do
     getLEPred = getOption oLineEndChars >>= \cs -> pure (`elem` cs)
 
 nullify :: Part -> Gen Part
-nullify = go []
-    where
-    go calls part = case part of
-        Empty -> mempty
-        Byte _ -> eUnsatisfiable
-        Sequence ps -> if null ps then mempty else eUnsatisfiable
-        CClass _ _ -> eUnsatisfiable
-        Quantified _ r _ -> if rMin r == 0 then mempty else eUnsatisfiable
-        Alternative ps -> foldr (<|>) empty $ go calls <$> ps
-        Reference ix -> do
-            m <- getResolved' ix
-            case m of
-                Just bs -> if S.null bs then pure () else eUnsatisfiable
-                Nothing -> do
-                    g <- getGroup ix
-                    p <- go calls $ gParts g
-                    void . genGroup $ Group ix p
-            pure $ Reference ix
-        Call ix -> do
-            Group ix' p <- either getGroup getNamedGroup ix
-            when (ix' `elem` calls) eUnsatisfiable
-            go (ix' : calls) p
-        Anchored p1 as p2 -> Anchored <$> nullify p1 <*> pure as <*> nullify p2
+nullify part = case part of
+    Empty -> mempty
+    Byte _ -> eUnsatisfiable
+    Sequence ps -> if null ps then mempty else eUnsatisfiable
+    CClass _ _ -> eUnsatisfiable
+    Quantified _ r _ -> if rMin r == 0 then mempty else eUnsatisfiable
+    Alternative ps -> foldr (<|>) empty $ nullify <$> ps
+    Reference ix -> do
+        m <- getResolved' ix
+        case m of
+            Just bs -> if S.null bs then pure () else eUnsatisfiable
+            Nothing -> do
+                g <- getGroup ix
+                p <- nullify $ gParts g
+                void . genGroup $ Group ix p
+        pure $ Reference ix
+    Call _ -> eNotSupported "pattern calls"
+    Anchored p1 as p2 -> Anchored <$> nullify p1 <*> pure as <*> nullify p2
 
 comprise :: (Char -> Bool) -> Part -> Gen Part
 comprise p part = case part of
@@ -277,7 +253,7 @@ comprise p part = case part of
                 p <- comprise p $ gParts g
                 void . genGroup $ Group ix p
         pure $ Reference ix
-    Call ix -> comprise p . gParts =<< either getGroup getNamedGroup ix
+    Call _ -> eNotSupported "pattern calls"
     Anchored p1 as p2 -> Anchored <$> comprise p p1 <*> pure as <*> comprise p p2
 
 endWith :: (Char -> Bool) -> Part -> Gen Part
@@ -299,7 +275,7 @@ endWith p part = case part of
                 p <- endWith p $ gParts g
                 void . genGroup $ Group ix p
         pure $ Reference ix
-    Call ix -> endWith p . gParts =<< either getGroup getNamedGroup ix
+    Call ix -> eNotSupported "pattern calls"
     Anchored p1 as p2 -> eGenError "<><><>"
 
 startWith :: (Char -> Bool) -> Part -> Gen Part
@@ -321,5 +297,5 @@ startWith p part = case part of
                 p <- startWith p $ gParts g
                 void . genGroup $ Group ix p
         pure $ Reference ix
-    Call ix -> startWith p . gParts =<< either getGroup getNamedGroup ix
+    Call ix -> eNotSupported "pattern calls"
     Anchored p1 as p2 -> eGenError "<><><>"
