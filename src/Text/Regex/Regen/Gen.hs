@@ -207,14 +207,17 @@ genAnchored p1 as p2 = do
     genPart alt
     where
     resolve StartOfMatch     = eGenError "start-of-match anchors unsupported"
-    resolve WordBoundary     = eGenError "word-boundary anchors unsupported"
-    resolve WordInternal     = eGenError "word-internal anchors unsupported"
-    resolve Start            =                      nullify    p1 <> pure         p2
-    resolve End              =                      pure       p1 <> nullify      p2
-    resolve BeforeNewline    = getLEPred >>= \le -> pure       p1 <> startWith le p2
-    resolve AfterNewline     = getLEPred >>= \le -> endWith le p1 <> pure         p2
-    resolve EndBeforeNewline = getLEPred >>= \le -> pure       p1 <> comprise  le p2
-    getLEPred = getOption oLineEndChars >>= \cs -> pure (`elem` cs)
+    resolve WordBoundary     =                  endWith isW p1 <> pure          p2
+                                            <|> pure        p1 <> startWith isW p2
+    resolve WordInternal     =                  endWith isw p1 <> startWith isw p2
+    resolve Start            =                  nullify     p1 <> pure          p2
+    resolve End              =                  pure        p1 <> nullify       p2
+    resolve BeforeNewline    = getLE >>= \le -> pure        p1 <> startWith le  p2
+    resolve AfterNewline     = getLE >>= \le -> endWith le  p1 <> pure          p2
+    resolve EndBeforeNewline = getLE >>= \le -> pure        p1 <> comprise  le  p2
+    getLE = getOption oLineEndChars >>= \cs -> pure (`elem` cs)
+    isw c = c=='_' || ('A'<=c && c<='Z') || ('a'<=c && c<='z') || ('0'<=c && c<='9')
+    isW   = not . isw
 
 nullify :: Part -> Gen Part
 nullify part = case part of
@@ -258,44 +261,48 @@ comprise p part = case part of
 
 endWith :: (Char -> Bool) -> Part -> Gen Part
 endWith p part = case part of
-    Empty -> mempty
+    Empty -> eUnsatisfiable
     Byte c -> if p c then pure part else eUnsatisfiable
     Sequence ps -> case reverse ps of
         []         -> eUnsatisfiable
         part : ps' -> nonEmptySeq . reverse .: (:) <$> endWith p part <*> pure ps'
     CClass b cs -> nonEmptyCClassM p $ if b then cs else ['\x00'..'\xff'] \\ cs
-    Quantified q r t -> Quantified <$> endWith p q <*> pure r <*> pure t
-    Alternative ps -> Alternative . catMaybes <$> mapM (tryMaybe . endWith p) ps
+    Quantified q r t -> endWith p q >>= \q' -> nonEmptyQuantM q' r t
+    Alternative ps -> nonEmptyAlt . catMaybes <$> mapM (tryMaybe . endWith p) ps
     Reference ix -> do
         m <- getResolved' ix
         case m of
-            Just bs -> if S.null bs || p (S.last bs) then pure () else eUnsatisfiable
+            Just bs -> if S.null bs || p (S.last bs)
+                then pure ()
+                else eUnsatisfiable
             Nothing -> do
                 g <- getGroup ix
                 p <- endWith p $ gParts g
                 void . genGroup $ Group ix p
         pure $ Reference ix
     Call ix -> eNotSupported "pattern calls"
-    Anchored p1 as p2 -> eGenError "<><><>"
+    Anchored p1 as p2 -> Anchored p1 as <$> endWith p p2
 
 startWith :: (Char -> Bool) -> Part -> Gen Part
 startWith p part = case part of
-    Empty -> mempty
+    Empty -> eUnsatisfiable
     Byte c -> if p c then pure part else eUnsatisfiable
     Sequence ps -> case ps of
         []         -> eUnsatisfiable
         part : ps' -> nonEmptySeq .: (:) <$> startWith p part <*> pure ps'
     CClass b cs -> nonEmptyCClassM p $ if b then cs else ['\x00'..'\xff'] \\ cs
-    Quantified q r t -> Quantified <$> startWith p q <*> pure r <*> pure t
-    Alternative ps -> Alternative . catMaybes <$> mapM (tryMaybe . startWith p) ps
+    Quantified q r t -> startWith p q >>= \q' -> nonEmptyQuantM q' r t
+    Alternative ps -> nonEmptyAlt . catMaybes <$> mapM (tryMaybe . startWith p) ps
     Reference ix -> do
         m <- getResolved' ix
         case m of
-            Just bs -> if S.null bs || p (S.head bs) then pure () else eUnsatisfiable
+            Just bs -> if S.null bs || p (S.head bs)
+                then pure ()
+                else eUnsatisfiable
             Nothing -> do
                 g <- getGroup ix
                 p <- startWith p $ gParts g
                 void . genGroup $ Group ix p
         pure $ Reference ix
     Call ix -> eNotSupported "pattern calls"
-    Anchored p1 as p2 -> eGenError "<><><>"
+    Anchored p1 as p2 -> Anchored <$> startWith p p1 <*> pure as <*> pure p2

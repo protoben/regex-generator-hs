@@ -85,6 +85,11 @@ nonEmptyCClassM p cs = case filter p cs of
     []  -> eUnsatisfiable
     cs' -> pure $ CClass True cs'
 
+nonEmptyQuantM :: MonadThrow m => Part -> Range -> Strategy -> m Part
+nonEmptyQuantM p (Range 0 (Just 0)) s = eUnsatisfiable
+nonEmptyQuantM p (Range 0 m)        s = pure $ Quantified p (Range 1 m) s
+nonEmptyQuantM p r                  s = pure $ Quantified p r           s
+
 nonEmptyAlt :: [Part] -> Part
 nonEmptyAlt [] = Empty
 nonEmptyAlt ps = Alternative ps
