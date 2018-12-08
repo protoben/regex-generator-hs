@@ -7,6 +7,7 @@ Example
 -------
 
 ```haskell
+{-# LANGUAGE OverloadedStrings #-}
 import Text.Regex.Regen (generate)
 
 main :: IO ()
