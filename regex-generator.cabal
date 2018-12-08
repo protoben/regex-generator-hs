@@ -3,7 +3,7 @@
 
 name:                regex-generator
 version:             0.1.0.0
--- synopsis:            
+synopsis:            Generate a random string from a PCRE
 -- description:         
 license:             MIT
 license-file:        LICENSE
