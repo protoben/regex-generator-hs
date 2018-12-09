@@ -251,12 +251,12 @@ globalOption = paren $ char '*' >> choice
     , () <$ string "NO_AUTO_POSSESS"
     , () <$ string "NO_START_OPT"
     , () <$ string "BSR_ANYCRLF"
-    , string "BSR_UNICODE" >>  noUnicode
-    , string "UTF8"        >>  noUnicode
-    , string "UTF16"       >>  noUnicode
-    , string "UTF32"       >>  noUnicode
-    , string "UTF"         >>  noUnicode
-    , string "UCP"         >>  noUnicode
+    , () <$ string "UTF8"
+    , string "BSR_UNICODE" >>  eNotSupported "unicode"
+    , string "UTF16"       >>  eNotSupported "utf16"
+    , string "UTF32"       >>  eNotSupported "utf32"
+    , string "UTF"         >>  eNotSupported "unicode"
+    , string "UCP"         >>  eNotSupported "unicode"
     , string "CRLF"        >>  noCRLF
     , string "ANYCRLF"     >>  setLineEnds AnyCRLF
     , string "ANY"         >>  setLineEnds Any
@@ -266,7 +266,6 @@ globalOption = paren $ char '*' >> choice
     ]
     where
     eBadOpt s = eParserError $ "bad global option: " ++ show s
-    noUnicode = eNotSupported "unicode"
     noCRLF    = eNotSupported "crlf line ends"
 
 localOption :: ParserST ()

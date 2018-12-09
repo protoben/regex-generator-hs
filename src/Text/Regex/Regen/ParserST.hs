@@ -180,7 +180,7 @@ digit  = lift P.digit
 letter = lift P.letter_ascii
 
 hexByte :: ParserST Char
-hexByte = inRange $ char 'x' *> (byte' <|> braced byte' <|> pure '\0')
+hexByte = char 'x' *> (byte' <|> braced byte' <|> pure '\0')
     where
     byte'      = byte2 <|> byte1
     byte2      = decode <$> hexDigit <*> hexDigit
@@ -192,7 +192,7 @@ hexByte = inRange $ char 'x' *> (byte' <|> braced byte' <|> pure '\0')
     hexDigitAZ = (\c -> ord c - ord 'A' + 0xA) <$> cInRange 'A' 'Z'
 
 octalByte :: ParserST Char
-octalByte = inRange $ byte' <|> char 'o' *> (braced byte' <|> eMissingBrace)
+octalByte = byte' <|> char 'o' *> (braced byte' <|> eMissingBrace)
     where
     octDigit      = (\c -> ord c - ord '0') <$> cInRange '0' '7'
     byte'         = byte3 <|> byte2 <|> byte1
@@ -201,21 +201,6 @@ octalByte = inRange $ byte' <|> char 'o' *> (braced byte' <|> eMissingBrace)
     byte1         = decode <$> pure 0   <*> pure 0   <*> octDigit
     decode a b c  = chr $ (a * 64) + (b * 8) + c
     eMissingBrace = eParserError "missing '{' after '\\o'"
-
-inRange :: ParserST Char -> ParserST Char
-inRange p = p >>= \c ->
-    if '\x00' <= c && c <= '\x7f'
-        then pure c
-        else eParserError
-            $ showString "octal and hex escapes must be in range "
-            $ showRange '\x00' '\x7f' ""
-    where
-    showHex'  c   = showString "0x" . zeroPad 2 (showHex (ord c) "")
-    showOct'  c   = zeroPad 3 $ showOct (ord c) ""
-    zeroPad   n s = showString (replicate (n - length s) '0') . showString s
-    showHexR  c d = showHex' c . showString "-" . showHex' d
-    showOctR  c d = showOct' c . showString "-" . showOct' d
-    showRange c d = showHexR c d . showString " (" . showOctR c d . showString ")"
 
 cescape :: ParserST Char
 cescape = choice

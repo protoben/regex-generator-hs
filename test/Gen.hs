@@ -54,10 +54,6 @@ literals shouldGen = describe "handles literals and escapes" $ do
     it "accepts whitespace escape"  $ shouldGen "\\R"
     it "accepts C escapes"          $ shouldGen "\\a\\n\\f\\t"
     it "accepts escaped specials"   $ shouldGen "\\[\\(\\|\\$\\^\\.\\*"
-    it "rejects out-of-range hex escapes" $
-        generate "\\x80" `shouldThrow` isEParserError
-    it "rejects out-of-range octal escapes" $
-        generate "\\200" `shouldThrow` isEParserError
     it "rejects '\\C'" $
         generate "\\C" `shouldThrow` isENotSupported
     it "rejects '\\X'" $
@@ -230,6 +226,7 @@ globalOpts shouldGen = describe "global options" $ do
     it "ignores 'NO_AUTO_POSSESS'"  $ shouldGen "(*NO_AUTO_POSSESS)foo"
     it "ignores 'NO_START_OPT'"     $ shouldGen "(*NO_START_OPT)foo"
     it "ignores 'BSR_ANYCRLF'"      $ shouldGen "(*BSR_ANYCRLF)foo"
+    it "allows 'UTF8'"              $ shouldGen "(*UTF8)foo"
     it "allows 'LF'"                $ shouldGen "(*LF)foo"
     it "allows 'CR'"                $ shouldGen "(*CR)foo"
     it "allows 'ANY'"               $ shouldGen "(*ANY)foo"
@@ -238,8 +235,6 @@ globalOpts shouldGen = describe "global options" $ do
         generate "(*CRLF)foo" `shouldThrow` isENotSupported
     it "rejects 'BSR_UNICODE'" $
         generate "(*BSR_UNICODE)foo" `shouldThrow` isENotSupported
-    it "rejects 'UTF8'" $
-        generate "(*UTF8)foo" `shouldThrow` isENotSupported
     it "rejects 'UTF16'" $
         generate "(*UTF16)foo" `shouldThrow` isENotSupported
     it "rejects 'UTF32'" $

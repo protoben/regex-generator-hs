@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                regex-generator
-version:             0.1.0.2
+version:             0.1.0.3
 synopsis:            Generate a random string from a PCRE
 description:         The regex-generator library allows generating bytestrings
                      from PCREs. See github.com/protoben/regex-generator-hs for
